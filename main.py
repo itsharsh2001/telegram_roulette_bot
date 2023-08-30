@@ -24,6 +24,8 @@ dispatcher = Dispatcher(bot_instance)
 
 current_batch_bets = []
 context_queue = queue.Queue()
+betting_users = set()  # Set to store users who have placed bets in the current cycle
+
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Hello! Thanks for chatting with me! I am Roulette bot!')
@@ -63,6 +65,12 @@ def handle_response(text: str) -> str:
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+        user = update.message.from_user.username
+
+        if user in betting_users:
+            await update.message.reply_text("You've already placed a bet in this cycle. Please wait for the next cycle to place another bet.")
+            return
+        
         tokens, choice = update.message.text.split(' ')
         tokens = int(tokens)
         
@@ -152,6 +160,7 @@ def process_bets(context: ContextTypes.DEFAULT_TYPE, bot:ExtBot):
         print('everything')
         # Clear current batch bets for the next round
         current_batch_bets = []
+        betting_users.clear()
 
 async def send_results_async(chat_id, results_text):
     await bot_instance.send_message(chat_id=chat_id, text=results_text)
