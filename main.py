@@ -25,20 +25,36 @@ dispatcher = Dispatcher(bot_instance)
 current_batch_bets = []
 context_queue = queue.Queue()
 betting_users = set()  # Set to store users who have placed bets in the current cycle
+users_with_bets = {}
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Hello! Thanks for chatting with me! I am Roulette bot!')
+    if update.message.chat.type == 'private':
+        await update.message.reply_text("Please use the bot in a group chat.")
+    else:
+        await update.message.reply_text('Hello! Thanks for chatting with me! I am Roulette bot!')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Please type something so I can respond')
+    if update.message.chat.type == 'private':
+        await update.message.reply_text("Please use the bot in a group chat.")
+    else:
+        await update.message.reply_text('Please type something so I can respond')
 
 async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('This is a custom command')
+    if update.message.chat.type == 'private':
+        await update.message.reply_text("Please use the bot in a group chat.")
+    else:
+        await update.message.reply_text('This is a custom command')
 
 async def bet_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user.username
+    if user in users_with_bets:
+        await update.message.reply_text("You have already placed a bet in this batch. Please wait for the next batch.")
+        return
+    
+    
     await update.message.reply_text('Please enter the number of coins foolwed by betting colour after space')
-
+    users_with_bets[user] = True
 
 #Responses
 
@@ -64,28 +80,31 @@ def handle_response(text: str) -> str:
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        user = update.message.from_user.username
+    if update.message.chat.type == 'group' or update.message.chat.type == 'supergroup':
+        try:
+            user = update.message.from_user.username
 
-        if user in betting_users:
-            await update.message.reply_text("You've already placed a bet in this cycle. Please wait for the next cycle to place another bet.")
-            return
-        
-        tokens, choice = update.message.text.split(' ')
-        tokens = int(tokens)
-        
-        print(tokens, choice)
+            if any(bet['user']==user for bet in current_batch_bets):
+                print(user,'user')
+                await update.message.reply_text("You've already placed a bet in this cycle. Please wait for the next cycle to place another bet.")
+                return
+            
+            tokens, choice = update.message.text.split(' ')
+            tokens = int(tokens)
+            
+            print(tokens, choice)
 
-        if choice not in ['red', 'black', 'green']:
-            raise ValueError
-        current_batch_bets.append({'user': update.message.from_user.username, 'tokens': tokens, 'choice': choice})
+            if choice not in ['red', 'black', 'green']:
+                raise ValueError
+            betting_users.add(user)
+            current_batch_bets.append({'user': update.message.from_user.username, 'tokens': tokens, 'choice': choice})
 
-        # print(current_batch_bets[0])
-        await update.message.reply_text(f"Your bet of {tokens} tokens on {choice} has been registered!")
-        context.bot_data['chat_id'] = update.message.chat_id
-        context_queue.put(context)
-    except ValueError:
-        await update.message.reply_text("Invalid input format. Please enter in the format: <tokens> <choice>.")
+            # print(current_batch_bets[0])
+            await update.message.reply_text(f"Your bet of {tokens} tokens on {choice} has been registered!")
+            context.bot_data['chat_id'] = update.message.chat_id
+            context_queue.put(context)
+        except ValueError:
+            await update.message.reply_text("Invalid input format. Please enter in the format: <tokens> <choice>.")
 
 # def polling(context: CallbackContext):
 #     """Polling function that runs every 5 minutes to determine bet outcomes"""
@@ -161,6 +180,7 @@ def process_bets(context: ContextTypes.DEFAULT_TYPE, bot:ExtBot):
         # Clear current batch bets for the next round
         current_batch_bets = []
         betting_users.clear()
+        users_with_bets.clear()
 
 async def send_results_async(chat_id, results_text):
     await bot_instance.send_message(chat_id=chat_id, text=results_text)
